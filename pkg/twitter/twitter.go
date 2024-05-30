@@ -27,7 +27,7 @@ type Post struct {
 	Views         int       `json:"views"`
 }
 
-func (c *Browser) Posts(parent context.Context, page string, n int) ([]*Post, error) {
+func (c *Browser) Posts(parent context.Context, page string, n int, withFollowers bool) ([]*Post, error) {
 	// Create a new tab based on client context
 	ctx, cancel := chromedp.NewContext(c.browserContext)
 	defer cancel()
@@ -78,15 +78,17 @@ func (c *Browser) Posts(parent context.Context, page string, n int) ([]*Post, er
 			ids[post.ID] = struct{}{}
 
 			// Obtain the user stats
-			f, ok := followers[post.UserID]
-			if !ok {
-				candidate, err := getFolowers(ctx, post.UserID)
-				if err != nil {
-					return nil, fmt.Errorf("twitter: couldn't get followers: %w", err)
+			if withFollowers {
+				f, ok := followers[post.UserID]
+				if !ok {
+					candidate, err := getFolowers(ctx, post.UserID)
+					if err != nil {
+						return nil, fmt.Errorf("twitter: couldn't get followers: %w", err)
+					}
+					f = candidate
 				}
-				f = candidate
+				post.UserFollowers = f
 			}
-			post.UserFollowers = f
 
 			// Append the post
 			posts = append(posts, post)

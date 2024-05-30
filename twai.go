@@ -4,24 +4,26 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"regexp"
 	"sort"
 	"strconv"
 	"time"
 
+	"github.com/gocarina/gocsv"
 	"github.com/igolaizola/twai/pkg/openai"
 	"github.com/igolaizola/twai/pkg/twitter"
 )
 
 type Tweets struct {
-	Link      string `json:"link"`
-	Score     int    `json:"score"`
-	Views     int    `json:"views"`
-	Followers int    `json:"followers"`
+	Score     int    `json:"score" csv:"score"`
+	Views     int    `json:"views" csv:"views"`
+	Followers int    `json:"followers" csv:"followers"`
+	Link      string `json:"link" csv:"link"`
 }
 
 // Run runs the twai process.
-func Run(ctx context.Context, page string, n int) error {
+func Run(ctx context.Context, page string, n int, followers bool, output string) error {
 	log.Println("running")
 	defer log.Println("finished")
 
@@ -40,7 +42,7 @@ func Run(ctx context.Context, page string, n int) error {
 	defer func() { _ = b.Stop() }()
 
 	// Get tweets
-	posts, err := b.Posts(ctx, page, n)
+	posts, err := b.Posts(ctx, page, n, followers)
 	if err != nil {
 		return err
 	}
@@ -75,9 +77,19 @@ func Run(ctx context.Context, page string, n int) error {
 	sort.Slice(tws, func(i, j int) bool {
 		return tws[i].Score > tws[j].Score || (tws[i].Score == tws[j].Score && tws[i].Views > tws[j].Views)
 	})
-	fmt.Println("Score\tViews\tFollowers\tLink")
-	for _, tw := range tws {
-		fmt.Printf("%d\t%d\t%d\t%s\n", tw.Score, tw.Views, tw.Followers, tw.Link)
+
+	// Marshal tweets to CSV
+	data, err := gocsv.MarshalBytes(&tws)
+	if err != nil {
+		return fmt.Errorf("couldn't marshal tweets to csv: %w", err)
+	}
+	// Write to file if output is provided
+	if output != "" {
+		if err := os.WriteFile(output, data, 0644); err != nil {
+			return fmt.Errorf("couldn't write tweets to file: %w", err)
+		}
+	} else {
+		fmt.Println(string(data))
 	}
 	return nil
 }

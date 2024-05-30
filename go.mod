@@ -7,6 +7,7 @@ require (
 	github.com/chromedp/cdproto v0.0.0-20240524221637-55927c2a4565
 	github.com/chromedp/chromedp v0.9.5
 	github.com/go-rod/stealth v0.4.9
+	github.com/gocarina/gocsv v0.0.0-20240520201108-78e41c74b4b1
 	github.com/peterbourgon/ff/v3 v3.3.0
 	github.com/sashabaranov/go-openai v1.24.1
 )

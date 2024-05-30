@@ -83,6 +83,8 @@ func newRunCommand() *ffcli.Command {
 
 	page := fs.String("page", "home", "page to fetch")
 	n := fs.Int("n", 5, "number of times to scroll down")
+	followers := fs.Bool("followers", false, "fetch followers stats")
+	output := fs.String("output", "", "output file")
 
 	return &ffcli.Command{
 		Name:       cmd,
@@ -95,7 +97,7 @@ func newRunCommand() *ffcli.Command {
 		ShortHelp: fmt.Sprintf("twai %s command", cmd),
 		FlagSet:   fs,
 		Exec: func(ctx context.Context, args []string) error {
-			return twai.Run(ctx, *page, *n)
+			return twai.Run(ctx, *page, *n, *followers, *output)
 		},
 	}
 }
