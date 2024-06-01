@@ -43,7 +43,9 @@ func newCommand() *ffcli.Command {
 		},
 		Subcommands: []*ffcli.Command{
 			newVersionCommand(),
-			newRunCommand(),
+			newScrapeCommand(),
+			newScoreCommand(),
+			newEloCommand(),
 		},
 	}
 }
@@ -76,8 +78,8 @@ func newVersionCommand() *ffcli.Command {
 	}
 }
 
-func newRunCommand() *ffcli.Command {
-	cmd := "run"
+func newScrapeCommand() *ffcli.Command {
+	cmd := "scrape"
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 	_ = fs.String("config", "", "config file (optional)")
 
@@ -97,7 +99,56 @@ func newRunCommand() *ffcli.Command {
 		ShortHelp: fmt.Sprintf("twai %s command", cmd),
 		FlagSet:   fs,
 		Exec: func(ctx context.Context, args []string) error {
-			return twai.Run(ctx, *page, *n, *followers, *output)
+			return twai.Scrape(ctx, *page, *n, *followers, *output)
+		},
+	}
+}
+
+func newScoreCommand() *ffcli.Command {
+	cmd := "score"
+	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
+	_ = fs.String("config", "", "config file (optional)")
+
+	input := fs.String("input", "", "input file")
+	output := fs.String("output", "", "output file")
+
+	return &ffcli.Command{
+		Name:       cmd,
+		ShortUsage: fmt.Sprintf("twai %s [flags] <key> <value data...>", cmd),
+		Options: []ff.Option{
+			ff.WithConfigFileFlag("config"),
+			ff.WithConfigFileParser(ff.PlainParser),
+			ff.WithEnvVarPrefix("twai"),
+		},
+		ShortHelp: fmt.Sprintf("twai %s command", cmd),
+		FlagSet:   fs,
+		Exec: func(ctx context.Context, args []string) error {
+			return twai.Score(ctx, *input, *output)
+		},
+	}
+}
+
+func newEloCommand() *ffcli.Command {
+	cmd := "elo"
+	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
+	_ = fs.String("config", "", "config file (optional)")
+
+	input := fs.String("input", "", "input file")
+	output := fs.String("output", "", "output file")
+	iterations := fs.Int("iterations", 10, "number of iterations")
+
+	return &ffcli.Command{
+		Name:       cmd,
+		ShortUsage: fmt.Sprintf("twai %s [flags] <key> <value data...>", cmd),
+		Options: []ff.Option{
+			ff.WithConfigFileFlag("config"),
+			ff.WithConfigFileParser(ff.PlainParser),
+			ff.WithEnvVarPrefix("twai"),
+		},
+		ShortHelp: fmt.Sprintf("twai %s command", cmd),
+		FlagSet:   fs,
+		Exec: func(ctx context.Context, args []string) error {
+			return twai.Elo(ctx, *input, *output, *iterations)
 		},
 	}
 }

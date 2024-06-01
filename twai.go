@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
+	"math/rand"
 	"os"
 	"regexp"
 	"sort"
@@ -15,22 +17,22 @@ import (
 	"github.com/igolaizola/twai/pkg/twitter"
 )
 
-type Tweets struct {
-	Score     int    `json:"score" csv:"score"`
-	Views     int    `json:"views" csv:"views"`
-	Followers int    `json:"followers" csv:"followers"`
-	Link      string `json:"link" csv:"link"`
+type Tweet struct {
+	Score int `json:"score" csv:"score"`
+
+	Comments int `json:"comments" csv:"comments"`
+	Retweets int `json:"retweets" csv:"retweets"`
+	Likes    int `json:"likes" csv:"likes"`
+	Views    int `json:"views" csv:"views"`
+
+	Time time.Time `json:"time" csv:"time"`
+	Text string    `json:"text" csv:"text"`
+	Link string    `json:"link" csv:"link"`
 }
 
-// Run runs the twai process.
-func Run(ctx context.Context, page string, n int, followers bool, output string) error {
+func Scrape(ctx context.Context, page string, n int, followers bool, output string) error {
 	log.Println("running")
 	defer log.Println("finished")
-
-	c := openai.New(&openai.Config{
-		Model: "llama3",
-		Host:  "http://localhost:11434/v1",
-	})
 
 	b := twitter.NewBrowser(&twitter.BrowserConfig{
 		Wait:        1 * time.Second,
@@ -47,9 +49,49 @@ func Run(ctx context.Context, page string, n int, followers bool, output string)
 		return err
 	}
 
+	// Order tweets by score and views
+	sort.Slice(posts, func(i, j int) bool {
+		return posts[i].Views > posts[j].Views
+	})
+
+	// Marshal tweets to CSV
+	data, err := gocsv.MarshalBytes(&posts)
+	if err != nil {
+		return fmt.Errorf("couldn't marshal tweets to csv: %w", err)
+	}
+	// Write to file if output is provided
+	if output != "" {
+		if err := os.WriteFile(output, data, 0644); err != nil {
+			return fmt.Errorf("couldn't write tweets to file: %w", err)
+		}
+	} else {
+		fmt.Println(string(data))
+	}
+	return nil
+}
+
+func Score(ctx context.Context, input, output string) error {
+	var posts []*twitter.Post
+	b, err := os.ReadFile(input)
+	if err != nil {
+		return fmt.Errorf("couldn't read tweets from file: %w", err)
+	}
+	if err := gocsv.UnmarshalBytes(b, &posts); err != nil {
+		return fmt.Errorf("couldn't unmarshal tweets from csv: %w", err)
+	}
+	if len(posts) < 1 {
+		return fmt.Errorf("need at least 1 tweet to score")
+	}
+
+	c := openai.New(&openai.Config{
+		Model: "llama3",
+		Host:  "http://localhost:11434/v1",
+	})
+
 	// Ask for relevance of each tweet
-	var tws []Tweets
+	var tws []*Tweet
 	for _, post := range posts {
+		log.Printf("ai %d/%d\n", len(tws)+1, len(posts))
 		resp, err := c.ChatCompletion(ctx, "From 1 to 10, how relevant is this tweet for a software engineer audience? Answer only with a number.\nTweet:\n"+post.Text)
 		if err != nil {
 			return err
@@ -65,11 +107,17 @@ func Run(ctx context.Context, page string, n int, followers bool, output string)
 			}
 			n = candidate
 		}
-		tws = append(tws, Tweets{
-			Link:      fmt.Sprintf("https://x.com/%s/status/%s", post.UserID, post.ID),
-			Score:     n,
-			Views:     post.Views,
-			Followers: post.UserFollowers,
+		tws = append(tws, &Tweet{
+			Score: n,
+
+			Comments: post.Comments,
+			Retweets: post.Retweets,
+			Likes:    post.Likes,
+			Views:    post.Views,
+
+			Time: post.Time,
+			Text: post.Text,
+			Link: fmt.Sprintf("https://x.com/%s/status/%s", post.UserID, post.ID),
 		})
 	}
 
@@ -94,4 +142,136 @@ func Run(ctx context.Context, page string, n int, followers bool, output string)
 	return nil
 }
 
+func Elo(ctx context.Context, input, output string, iterations int) error {
+	var posts []*twitter.Post
+	b, err := os.ReadFile(input)
+	if err != nil {
+		return fmt.Errorf("couldn't read tweets from file: %w", err)
+	}
+	if err := gocsv.UnmarshalBytes(b, &posts); err != nil {
+		return fmt.Errorf("couldn't unmarshal tweets from csv: %w", err)
+	}
+	if len(posts) < 2 {
+		return fmt.Errorf("need at least 2 tweets to compare")
+	}
+
+	c := openai.New(&openai.Config{
+		Model: "llama3",
+		Host:  "http://localhost:11434/v1",
+	})
+
+	var tws []*Tweet
+	for _, post := range posts {
+		tws = append(tws, &Tweet{
+			Score: 1200,
+
+			Comments: post.Comments,
+			Retweets: post.Retweets,
+			Likes:    post.Likes,
+			Views:    post.Views,
+
+			Time: post.Time,
+			Text: post.Text,
+			Link: fmt.Sprintf("https://x.com/%s/status/%s", post.UserID, post.ID),
+		})
+	}
+
+	// Match tweets against each other
+	var exit bool
+	var count int
+	for i := 0; i < iterations; i++ {
+		if exit {
+			break
+		}
+		for _, a := range tws {
+			count++
+			log.Printf("ai %d/%d\n", count, len(tws)*iterations)
+
+			// Choose a random tweet to compare against
+			var b *Tweet
+			for {
+				b = tws[rand.Intn(len(posts))]
+				if b.Link != a.Link {
+					break
+				}
+			}
+
+			resp, err := c.ChatCompletion(ctx, "Which tweet is best? 1 or 2? Answer only with the number 1 or 2.\n\nTWEET 1: "+a.Link+"\n\nTWEET 2: "+b.Link)
+			if err != nil {
+				if ctx.Err() != nil {
+					exit = true
+					break
+				}
+				return err
+			}
+			match := numberRegex.FindString(resp)
+			if match == "" {
+				log.Println("no number found in response")
+				log.Println(resp)
+				continue
+			}
+			n, err := strconv.Atoi(match)
+			if err != nil {
+				log.Println("error parsing number from response")
+				log.Println(resp)
+				continue
+			}
+			if n != 1 && n != 2 {
+				log.Println("invalid number found in response")
+				log.Println(resp)
+				continue
+			}
+			scoreA := 1.0
+			scoreB := 0.0
+			if n == 2 {
+				scoreA = 0.0
+				scoreB = 1.0
+			}
+
+			newRatingA, newRatingB := updateEloRatings(float64(a.Score), float64(b.Score), scoreA, scoreB)
+			a.Score = int(newRatingA)
+			b.Score = int(newRatingB)
+		}
+	}
+
+	// Order tweets by score and views
+	sort.Slice(tws, func(i, j int) bool {
+		return tws[i].Score > tws[j].Score || (tws[i].Score == tws[j].Score && tws[i].Views > tws[j].Views)
+	})
+
+	// Marshal tweets to CSV
+	data, err := gocsv.MarshalBytes(&tws)
+	if err != nil {
+		return fmt.Errorf("couldn't marshal tweets to csv: %w", err)
+	}
+	// Write to file if output is provided
+	if output != "" {
+		if err := os.WriteFile(output, data, 0644); err != nil {
+			return fmt.Errorf("couldn't write tweets to file: %w", err)
+		}
+	} else {
+		fmt.Println(string(data))
+	}
+	return nil
+}
+
 var numberRegex = regexp.MustCompile(`\d+`)
+
+// Constants for the K-factor
+const K = 32
+
+// Function to calculate the expected score
+func expectedScore(ratingA, ratingB float64) float64 {
+	return 1.0 / (1.0 + math.Pow(10, (ratingB-ratingA)/400))
+}
+
+// Function to update Elo ratings
+func updateEloRatings(ratingA, ratingB, scoreA, scoreB float64) (float64, float64) {
+	expectedA := expectedScore(ratingA, ratingB)
+	expectedB := expectedScore(ratingB, ratingA)
+
+	newRatingA := ratingA + K*(scoreA-expectedA)
+	newRatingB := ratingB + K*(scoreB-expectedB)
+
+	return newRatingA, newRatingB
+}

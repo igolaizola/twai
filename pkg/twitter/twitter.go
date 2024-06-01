@@ -64,6 +64,7 @@ func (c *Browser) Posts(parent context.Context, page string, n int, withFollower
 	ids := map[string]struct{}{}
 	var posts []*Post
 	followers := map[string]int{}
+	var noPost int
 	for {
 		select {
 		case <-ctx.Done():
@@ -93,16 +94,23 @@ func (c *Browser) Posts(parent context.Context, page string, n int, withFollower
 			// Append the post
 			posts = append(posts, post)
 		}
-		if len(posts) >= n {
-			break
+		if len(currentPosts) == 0 {
+			noPost++
+			if noPost > 5 {
+				log.Println("no more posts found")
+				return posts, nil
+			}
 		}
+		if len(posts) >= n {
+			return posts[:n], nil
+		}
+		log.Printf("tweet %d/%d\n", len(posts), n)
 
 		// Scroll down
 		if err := scrollDown(ctx); err != nil {
 			return nil, fmt.Errorf("twitter: couldn't scroll down: %w", err)
 		}
 	}
-	return posts, nil
 }
 
 func getFolowers(ctx context.Context, userID string) (int, error) {
