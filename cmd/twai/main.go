@@ -83,10 +83,11 @@ func newScrapeCommand() *ffcli.Command {
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 	_ = fs.String("config", "", "config file (optional)")
 
-	page := fs.String("page", "home", "page to fetch")
-	n := fs.Int("n", 5, "number of times to scroll down")
-	followers := fs.Bool("followers", false, "fetch followers stats")
-	output := fs.String("output", "", "output file")
+	var cfg twai.ScrapeConfig
+	fs.StringVar(&cfg.Page, "page", "home", "page to fetch (home or username)")
+	fs.IntVar(&cfg.N, "n", 50, "number of tweets to fetch")
+	fs.BoolVar(&cfg.Followers, "followers", false, "fetch followers stats")
+	fs.StringVar(&cfg.Output, "output", "", "output file")
 
 	return &ffcli.Command{
 		Name:       cmd,
@@ -99,7 +100,7 @@ func newScrapeCommand() *ffcli.Command {
 		ShortHelp: fmt.Sprintf("twai %s command", cmd),
 		FlagSet:   fs,
 		Exec: func(ctx context.Context, args []string) error {
-			return twai.Scrape(ctx, *page, *n, *followers, *output)
+			return twai.Scrape(ctx, &cfg)
 		},
 	}
 }
@@ -109,8 +110,13 @@ func newScoreCommand() *ffcli.Command {
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 	_ = fs.String("config", "", "config file (optional)")
 
-	input := fs.String("input", "", "input file")
-	output := fs.String("output", "", "output file")
+	var cfg twai.ScoreConfig
+	fs.StringVar(&cfg.Input, "input", "", "input file")
+	fs.StringVar(&cfg.Output, "output", "", "output file")
+	fs.StringVar(&cfg.Prompt, "prompt", "Rate the following tweet from 1 to 10 based on relevance, clarity, engagement, and impact. Only answer with a number.", "prompt")
+	fs.StringVar(&cfg.Model, "model", "llama3", "ai model (llama3, gpt-3.5-turbo, etc)")
+	fs.StringVar(&cfg.Host, "host", "http://localhost:11434/v1", "ai endpoint host (not needed for openai)")
+	fs.StringVar(&cfg.Token, "token", "", "authorization token (required for openai)")
 
 	return &ffcli.Command{
 		Name:       cmd,
@@ -123,7 +129,7 @@ func newScoreCommand() *ffcli.Command {
 		ShortHelp: fmt.Sprintf("twai %s command", cmd),
 		FlagSet:   fs,
 		Exec: func(ctx context.Context, args []string) error {
-			return twai.Score(ctx, *input, *output)
+			return twai.Score(ctx, &cfg)
 		},
 	}
 }
@@ -133,9 +139,14 @@ func newEloCommand() *ffcli.Command {
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 	_ = fs.String("config", "", "config file (optional)")
 
-	input := fs.String("input", "", "input file")
-	output := fs.String("output", "", "output file")
-	iterations := fs.Int("iterations", 10, "number of iterations")
+	var cfg twai.EloConfig
+	fs.StringVar(&cfg.Input, "input", "", "input file")
+	fs.StringVar(&cfg.Output, "output", "", "output file")
+	fs.IntVar(&cfg.Iterations, "iterations", 10, "number of iterations")
+	fs.StringVar(&cfg.Prompt, "prompt", "Rate the following tweet from 1 to 10 based on relevance, clarity, engagement, and impact. Only answer with a number.", "prompt")
+	fs.StringVar(&cfg.Model, "model", "llama3", "ai model (llama3, gpt-3.5-turbo, etc)")
+	fs.StringVar(&cfg.Host, "host", "http://localhost:11434/v1", "ai endpoint host (not needed for openai)")
+	fs.StringVar(&cfg.Token, "token", "", "authorization token (required for openai)")
 
 	return &ffcli.Command{
 		Name:       cmd,
@@ -148,7 +159,7 @@ func newEloCommand() *ffcli.Command {
 		ShortHelp: fmt.Sprintf("twai %s command", cmd),
 		FlagSet:   fs,
 		Exec: func(ctx context.Context, args []string) error {
-			return twai.Elo(ctx, *input, *output, *iterations)
+			return twai.Elo(ctx, &cfg)
 		},
 	}
 }

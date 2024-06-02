@@ -17,20 +17,14 @@ import (
 	"github.com/igolaizola/twai/pkg/twitter"
 )
 
-type Tweet struct {
-	Score int `json:"score" csv:"score"`
-
-	Comments int `json:"comments" csv:"comments"`
-	Retweets int `json:"retweets" csv:"retweets"`
-	Likes    int `json:"likes" csv:"likes"`
-	Views    int `json:"views" csv:"views"`
-
-	Time time.Time `json:"time" csv:"time"`
-	Text string    `json:"text" csv:"text"`
-	Link string    `json:"link" csv:"link"`
+type ScrapeConfig struct {
+	Page      string
+	N         int
+	Followers bool
+	Output    string
 }
 
-func Scrape(ctx context.Context, page string, n int, followers bool, output string) error {
+func Scrape(ctx context.Context, cfg *ScrapeConfig) error {
 	log.Println("running")
 	defer log.Println("finished")
 
@@ -44,7 +38,7 @@ func Scrape(ctx context.Context, page string, n int, followers bool, output stri
 	defer func() { _ = b.Stop() }()
 
 	// Get tweets
-	posts, err := b.Posts(ctx, page, n, followers)
+	posts, err := b.Posts(ctx, cfg.Page, cfg.N, cfg.Followers)
 	if err != nil {
 		return err
 	}
@@ -60,8 +54,8 @@ func Scrape(ctx context.Context, page string, n int, followers bool, output stri
 		return fmt.Errorf("couldn't marshal tweets to csv: %w", err)
 	}
 	// Write to file if output is provided
-	if output != "" {
-		if err := os.WriteFile(output, data, 0644); err != nil {
+	if cfg.Output != "" {
+		if err := os.WriteFile(cfg.Output, data, 0644); err != nil {
 			return fmt.Errorf("couldn't write tweets to file: %w", err)
 		}
 	} else {
@@ -70,9 +64,35 @@ func Scrape(ctx context.Context, page string, n int, followers bool, output stri
 	return nil
 }
 
-func Score(ctx context.Context, input, output string) error {
+type Tweet struct {
+	Score int `json:"score" csv:"score"`
+
+	Comments int `json:"comments" csv:"comments"`
+	Retweets int `json:"retweets" csv:"retweets"`
+	Likes    int `json:"likes" csv:"likes"`
+	Views    int `json:"views" csv:"views"`
+
+	Time time.Time `json:"time" csv:"time"`
+	Text string    `json:"text" csv:"text"`
+	Link string    `json:"link" csv:"link"`
+}
+
+type ScoreConfig struct {
+	Debug  bool
+	Input  string
+	Output string
+	Prompt string
+	Model  string
+	Host   string
+	Token  string
+}
+
+func Score(ctx context.Context, cfg *ScoreConfig) error {
+	log.Println("running")
+	defer log.Println("finished")
+
 	var posts []*twitter.Post
-	b, err := os.ReadFile(input)
+	b, err := os.ReadFile(cfg.Input)
 	if err != nil {
 		return fmt.Errorf("couldn't read tweets from file: %w", err)
 	}
@@ -84,15 +104,17 @@ func Score(ctx context.Context, input, output string) error {
 	}
 
 	c := openai.New(&openai.Config{
-		Model: "llama3",
-		Host:  "http://localhost:11434/v1",
+		Debug: cfg.Debug,
+		Model: cfg.Model,
+		Host:  cfg.Host,
+		Token: cfg.Token,
 	})
 
 	// Ask for relevance of each tweet
 	var tws []*Tweet
 	for _, post := range posts {
 		log.Printf("ai %d/%d\n", len(tws)+1, len(posts))
-		resp, err := c.ChatCompletion(ctx, "From 1 to 10, how relevant is this tweet for a software engineer audience? Answer only with a number.\nTweet:\n"+post.Text)
+		resp, err := c.ChatCompletion(ctx, "Rate the following tweet from 1 to 10 based on relevance, clarity, engagement, and impact. Only answer with a number.\n\n"+post.Text)
 		if err != nil {
 			return err
 		}
@@ -132,8 +154,8 @@ func Score(ctx context.Context, input, output string) error {
 		return fmt.Errorf("couldn't marshal tweets to csv: %w", err)
 	}
 	// Write to file if output is provided
-	if output != "" {
-		if err := os.WriteFile(output, data, 0644); err != nil {
+	if cfg.Output != "" {
+		if err := os.WriteFile(cfg.Output, data, 0644); err != nil {
 			return fmt.Errorf("couldn't write tweets to file: %w", err)
 		}
 	} else {
@@ -142,9 +164,23 @@ func Score(ctx context.Context, input, output string) error {
 	return nil
 }
 
-func Elo(ctx context.Context, input, output string, iterations int) error {
+type EloConfig struct {
+	Debug      bool
+	Input      string
+	Output     string
+	Iterations int
+	Model      string
+	Host       string
+	Prompt     string
+	Token      string
+}
+
+func Elo(ctx context.Context, cfg *EloConfig) error {
+	log.Println("running")
+	defer log.Println("finished")
+
 	var posts []*twitter.Post
-	b, err := os.ReadFile(input)
+	b, err := os.ReadFile(cfg.Input)
 	if err != nil {
 		return fmt.Errorf("couldn't read tweets from file: %w", err)
 	}
@@ -156,8 +192,10 @@ func Elo(ctx context.Context, input, output string, iterations int) error {
 	}
 
 	c := openai.New(&openai.Config{
-		Model: "llama3",
-		Host:  "http://localhost:11434/v1",
+		Debug: cfg.Debug,
+		Model: cfg.Model,
+		Host:  cfg.Host,
+		Token: cfg.Token,
 	})
 
 	var tws []*Tweet
@@ -174,6 +212,11 @@ func Elo(ctx context.Context, input, output string, iterations int) error {
 			Text: post.Text,
 			Link: fmt.Sprintf("https://x.com/%s/status/%s", post.UserID, post.ID),
 		})
+	}
+
+	iterations := cfg.Iterations
+	if iterations < 1 {
+		iterations = 1
 	}
 
 	// Match tweets against each other
@@ -245,8 +288,8 @@ func Elo(ctx context.Context, input, output string, iterations int) error {
 		return fmt.Errorf("couldn't marshal tweets to csv: %w", err)
 	}
 	// Write to file if output is provided
-	if output != "" {
-		if err := os.WriteFile(output, data, 0644); err != nil {
+	if cfg.Output != "" {
+		if err := os.WriteFile(cfg.Output, data, 0644); err != nil {
 			return fmt.Errorf("couldn't write tweets to file: %w", err)
 		}
 	} else {

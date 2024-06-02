@@ -94,12 +94,16 @@ func (c *Browser) Posts(parent context.Context, page string, n int, withFollower
 			// Append the post
 			posts = append(posts, post)
 		}
+
+		// Check if no more posts are found
 		if len(currentPosts) == 0 {
 			noPost++
-			if noPost > 5 {
-				log.Println("no more posts found")
+			if noPost > 2 {
+				log.Println("no more posts found, reached the end")
 				return posts, nil
 			}
+		} else {
+			noPost = 0
 		}
 		if len(posts) >= n {
 			return posts[:n], nil
