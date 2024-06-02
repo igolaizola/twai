@@ -8,11 +8,13 @@ require (
 	github.com/chromedp/chromedp v0.9.5
 	github.com/go-rod/stealth v0.4.9
 	github.com/gocarina/gocsv v0.0.0-20240520201108-78e41c74b4b1
+	github.com/igolaizola/webcli v0.0.0-20240530214710-73abbf57547d
 	github.com/peterbourgon/ff/v3 v3.3.0
 	github.com/sashabaranov/go-openai v1.24.1
 )
 
 require (
+	github.com/a-h/templ v0.2.680 // indirect
 	github.com/andybalholm/cascadia v1.3.2 // indirect
 	github.com/chromedp/sysutil v1.0.0 // indirect
 	github.com/go-rod/rod v0.113.0 // indirect

@@ -239,7 +239,7 @@ func Elo(ctx context.Context, cfg *EloConfig) error {
 				}
 			}
 
-			resp, err := c.ChatCompletion(ctx, "Which tweet is best? 1 or 2? Answer only with the number 1 or 2.\n\nTWEET 1: "+a.Link+"\n\nTWEET 2: "+b.Link)
+			resp, err := c.ChatCompletion(ctx, cfg.Prompt+"\n\nTWEET 1: "+a.Link+"\n\nTWEET 2: "+b.Link)
 			if err != nil {
 				if ctx.Err() != nil {
 					exit = true
