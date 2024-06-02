@@ -34,5 +34,5 @@ jobs:
           goos: ${{ matrix.goos }}
           goarch: ${{ matrix.goarch }}
           compress_assets: zip
-          project_path: "./cmd/gofast"
+          project_path: "./cmd/twai"
           extra_files: LICENSE README.md
