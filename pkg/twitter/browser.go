@@ -27,6 +27,7 @@ type Browser struct {
 	profile          bool
 	cookieStore      CookieStore
 	binPath          string
+	headless         bool
 }
 
 type BrowserConfig struct {
@@ -36,6 +37,7 @@ type BrowserConfig struct {
 	Profile     bool
 	CookieStore CookieStore
 	BinPath     string
+	Headless    bool
 }
 
 func NewBrowser(cfg *BrowserConfig) *Browser {
@@ -50,6 +52,7 @@ func NewBrowser(cfg *BrowserConfig) *Browser {
 		cookieStore: cfg.CookieStore,
 		rateLimit:   ratelimit.New(wait),
 		binPath:     cfg.BinPath,
+		headless:    cfg.Headless,
 	}
 }
 
@@ -80,7 +83,7 @@ func (b *Browser) Start(parent context.Context) error {
 			chromedp.DefaultExecAllocatorOptions[3:],
 			chromedp.NoFirstRun,
 			chromedp.NoDefaultBrowserCheck,
-			chromedp.Flag("headless", true),
+			chromedp.Flag("headless", b.headless),
 		)
 
 		if b.binPath != "" {

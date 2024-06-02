@@ -18,10 +18,13 @@ import (
 )
 
 type ScrapeConfig struct {
-	Page      string
-	N         int
-	Followers bool
-	Output    string
+	Debug       bool
+	CookieFile  string
+	ShowBrowser bool
+	Page        string
+	N           int
+	Followers   bool
+	Output      string
 }
 
 func Scrape(ctx context.Context, cfg *ScrapeConfig) error {
@@ -30,7 +33,8 @@ func Scrape(ctx context.Context, cfg *ScrapeConfig) error {
 
 	b := twitter.NewBrowser(&twitter.BrowserConfig{
 		Wait:        1 * time.Second,
-		CookieStore: twitter.NewCookieStore("cookie.txt"),
+		CookieStore: twitter.NewCookieStore(cfg.CookieFile),
+		Headless:    !cfg.ShowBrowser,
 	})
 	if err := b.Start(ctx); err != nil {
 		return err
