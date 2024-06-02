@@ -35,7 +35,7 @@ func main() {
 }
 
 func newCommand() *ffcli.Command {
-	fs := flag.NewFlagSet("webff", flag.ExitOnError)
+	fs := flag.NewFlagSet("twai", flag.ExitOnError)
 
 	cmds := []*ffcli.Command{
 		newVersionCommand(),
