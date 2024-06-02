@@ -14,6 +14,7 @@ import (
 	"github.com/igolaizola/webcli/pkg/webff"
 	"github.com/peterbourgon/ff/v3"
 	"github.com/peterbourgon/ff/v3/ffcli"
+	"github.com/peterbourgon/ff/v3/ffyaml"
 )
 
 // Build flags
@@ -45,7 +46,7 @@ func newCommand() *ffcli.Command {
 	port := fs.Int("port", 0, "port number")
 
 	return &ffcli.Command{
-		ShortUsage: "webff [flags] <subcommand>",
+		ShortUsage: "twai [flags] <subcommand>",
 		FlagSet:    fs,
 		Exec: func(ctx context.Context, args []string) error {
 			if len(args) == 0 {
@@ -112,7 +113,7 @@ func newScrapeCommand() *ffcli.Command {
 		ShortUsage: fmt.Sprintf("twai %s [flags] <key> <value data...>", cmd),
 		Options: []ff.Option{
 			ff.WithConfigFileFlag("config"),
-			ff.WithConfigFileParser(ff.PlainParser),
+			ff.WithConfigFileParser(ffyaml.Parser),
 			ff.WithEnvVarPrefix("twai"),
 		},
 		ShortHelp: fmt.Sprintf("twai %s command", cmd),
@@ -142,7 +143,7 @@ func newScoreCommand() *ffcli.Command {
 		ShortUsage: fmt.Sprintf("twai %s [flags] <key> <value data...>", cmd),
 		Options: []ff.Option{
 			ff.WithConfigFileFlag("config"),
-			ff.WithConfigFileParser(ff.PlainParser),
+			ff.WithConfigFileParser(ffyaml.Parser),
 			ff.WithEnvVarPrefix("twai"),
 		},
 		ShortHelp: fmt.Sprintf("twai %s command", cmd),
@@ -173,7 +174,7 @@ func newEloCommand() *ffcli.Command {
 		ShortUsage: fmt.Sprintf("twai %s [flags] <key> <value data...>", cmd),
 		Options: []ff.Option{
 			ff.WithConfigFileFlag("config"),
-			ff.WithConfigFileParser(ff.PlainParser),
+			ff.WithConfigFileParser(ffyaml.Parser),
 			ff.WithEnvVarPrefix("twai"),
 		},
 		ShortHelp: fmt.Sprintf("twai %s command", cmd),
