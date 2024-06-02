@@ -62,6 +62,7 @@ func Scrape(ctx context.Context, cfg *ScrapeConfig) error {
 		if err := os.WriteFile(cfg.Output, data, 0644); err != nil {
 			return fmt.Errorf("couldn't write tweets to file: %w", err)
 		}
+		fmt.Println("created file:", cfg.Output)
 	} else {
 		fmt.Println(string(data))
 	}
@@ -162,6 +163,7 @@ func Score(ctx context.Context, cfg *ScoreConfig) error {
 		if err := os.WriteFile(cfg.Output, data, 0644); err != nil {
 			return fmt.Errorf("couldn't write tweets to file: %w", err)
 		}
+		fmt.Println("created file:", cfg.Output)
 	} else {
 		fmt.Println(string(data))
 	}
@@ -296,6 +298,7 @@ func Elo(ctx context.Context, cfg *EloConfig) error {
 		if err := os.WriteFile(cfg.Output, data, 0644); err != nil {
 			return fmt.Errorf("couldn't write tweets to file: %w", err)
 		}
+		fmt.Println("created file:", cfg.Output)
 	} else {
 		fmt.Println(string(data))
 	}

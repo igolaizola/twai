@@ -22,6 +22,8 @@ Or you can download the binary from the [releases](https://github.com/igolaizola
 
 ## 📋 Requirements
 
+### Twitter cookie
+
 You need to capture the cookie from [Twitter](https://x.com/) website.
 
 1. Go to https://x.com/home
@@ -32,6 +34,21 @@ You need to capture the cookie from [Twitter](https://x.com/) website.
 6. Click on the first request to https://x.com/home
 7. Go to the "Request Headers"
 8. Copy the "cookie" header and save it in a `cookie.txt` file
+
+### AI model
+
+You need to have an AI model to score the tweets.
+
+You can use a local model via [Ollama](https://ollama.com/).
+
+- Download and install Ollama tool
+- Run `ollama run llama3` to download the model
+- Set the `host` to `http://localhost:11434/v1` and the `model` to `llama3`
+
+Or you can use an online model like [OpenAI](https://openai.com/).
+
+- Get an API key from OpenAI
+- Set the `model` to `gpt-3.5-turbo` and the `token` to your API key
 
 ## 🕹️ Usage
 
