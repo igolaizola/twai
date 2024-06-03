@@ -2,6 +2,7 @@ package twai
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -10,6 +11,7 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/gocarina/gocsv"
@@ -83,13 +85,14 @@ type Tweet struct {
 }
 
 type ScoreConfig struct {
-	Debug  bool
-	Input  string
-	Output string
-	Prompt string
-	Model  string
-	Host   string
-	Token  string
+	Debug       bool
+	Concurrency int
+	Input       string
+	Output      string
+	Prompt      string
+	Model       string
+	Host        string
+	Token       string
 }
 
 func Score(ctx context.Context, cfg *ScoreConfig) error {
@@ -115,38 +118,62 @@ func Score(ctx context.Context, cfg *ScoreConfig) error {
 		Token: cfg.Token,
 	})
 
-	// Ask for relevance of each tweet
-	var tws []*Tweet
-	for _, post := range posts {
-		log.Printf("ai %d/%d\n", len(tws)+1, len(posts))
-		resp, err := c.ChatCompletion(ctx, "Rate the following tweet from 1 to 10 based on relevance, clarity, engagement, and impact. Only answer with a number.\n\n"+post.Text)
-		if err != nil {
-			return err
-		}
-		match := numberRegex.FindString(resp)
-		var n int
-		if match == "" {
-			log.Println("no number found in response")
-		} else {
-			candidate, err := strconv.Atoi(match)
-			if err != nil {
-				log.Println("error parsing number from response")
-			}
-			n = candidate
-		}
-		tws = append(tws, &Tweet{
-			Score: n,
-
-			Comments: post.Comments,
-			Retweets: post.Retweets,
-			Likes:    post.Likes,
-			Views:    post.Views,
-
-			Time: post.Time,
-			Text: post.Text,
-			Link: fmt.Sprintf("https://x.com/%s/status/%s", post.UserID, post.ID),
-		})
+	// Concurrency settings
+	concurrency := cfg.Concurrency
+	if concurrency == 0 {
+		concurrency = 1
 	}
+
+	var idx int
+	var lck sync.Mutex
+
+	var tws []*Tweet
+
+	// Launch concurrent ai completions
+	concurrent(ctx, concurrency,
+		func() (*twitter.Post, bool) {
+			if idx >= len(posts) {
+				return nil, false
+			}
+			post := posts[idx]
+			log.Printf("ai: tweet %d/%d\n", idx+1, len(posts))
+			idx++
+			return post, true
+		},
+		func(post *twitter.Post) error {
+			// Ask for a score
+			resp, err := c.ChatCompletion(ctx, "Rate the following tweet from 1 to 10 based on relevance, clarity, engagement, and impact. Only answer with a number.\n\n"+post.Text)
+			if err != nil {
+				return err
+			}
+			match := numberRegex.FindString(resp)
+			var n int
+			if match == "" {
+				log.Println("no number found in response")
+			} else {
+				candidate, err := strconv.Atoi(match)
+				if err != nil {
+					log.Println("error parsing number from response")
+				}
+				n = candidate
+			}
+			lck.Lock()
+			defer lck.Unlock()
+			tws = append(tws, &Tweet{
+				Score: n,
+
+				Comments: post.Comments,
+				Retweets: post.Retweets,
+				Likes:    post.Likes,
+				Views:    post.Views,
+
+				Time: post.Time,
+				Text: post.Text,
+				Link: fmt.Sprintf("https://x.com/%s/status/%s", post.UserID, post.ID),
+			})
+			return nil
+		},
+	)
 
 	// Order tweets by score and views
 	sort.Slice(tws, func(i, j int) bool {
@@ -171,14 +198,15 @@ func Score(ctx context.Context, cfg *ScoreConfig) error {
 }
 
 type EloConfig struct {
-	Debug      bool
-	Input      string
-	Output     string
-	Iterations int
-	Model      string
-	Host       string
-	Prompt     string
-	Token      string
+	Debug       bool
+	Concurrency int
+	Input       string
+	Output      string
+	Iterations  int
+	Model       string
+	Host        string
+	Prompt      string
+	Token       string
 }
 
 func Elo(ctx context.Context, cfg *EloConfig) error {
@@ -225,17 +253,32 @@ func Elo(ctx context.Context, cfg *EloConfig) error {
 		iterations = 1
 	}
 
-	// Match tweets against each other
-	var exit bool
-	var count int
-	for i := 0; i < iterations; i++ {
-		if exit {
-			break
-		}
-		for _, a := range tws {
-			count++
-			log.Printf("ai %d/%d\n", count, len(tws)*iterations)
+	// Concurrency settings
+	concurrency := cfg.Concurrency
+	if concurrency == 0 {
+		concurrency = 1
+	}
 
+	var idx int
+	var currIteration int
+	var lck sync.Mutex
+
+	// Run concurrent ai completions
+	concurrent(ctx, concurrency,
+		func() (*Tweet, bool) {
+			if idx >= len(tws) {
+				idx = 0
+				currIteration++
+				if currIteration >= iterations {
+					return nil, false
+				}
+			}
+			tw := tws[idx]
+			log.Printf("ai: iteration %d/%d, tweet %d/%d\n", currIteration+1, iterations, idx+1, len(tws))
+			idx++
+			return tw, true
+		},
+		func(a *Tweet) error {
 			// Choose a random tweet to compare against
 			var b *Tweet
 			for {
@@ -245,30 +288,24 @@ func Elo(ctx context.Context, cfg *EloConfig) error {
 				}
 			}
 
+			// Make the comparison
 			resp, err := c.ChatCompletion(ctx, cfg.Prompt+"\n\nTWEET 1: "+a.Link+"\n\nTWEET 2: "+b.Link)
 			if err != nil {
-				if ctx.Err() != nil {
-					exit = true
-					break
-				}
 				return err
 			}
 			match := numberRegex.FindString(resp)
 			if match == "" {
-				log.Println("no number found in response")
 				log.Println(resp)
-				continue
+				return errors.New("no number found in response")
 			}
 			n, err := strconv.Atoi(match)
 			if err != nil {
-				log.Println("error parsing number from response")
 				log.Println(resp)
-				continue
+				return fmt.Errorf("error parsing number from response: %w", err)
 			}
 			if n != 1 && n != 2 {
-				log.Println("invalid number found in response")
 				log.Println(resp)
-				continue
+				return errors.New("invalid number found in response")
 			}
 			scoreA := 1.0
 			scoreB := 0.0
@@ -277,11 +314,15 @@ func Elo(ctx context.Context, cfg *EloConfig) error {
 				scoreB = 1.0
 			}
 
+			// Update Elo ratings
+			lck.Lock()
+			defer lck.Unlock()
 			newRatingA, newRatingB := updateEloRatings(float64(a.Score), float64(b.Score), scoreA, scoreB)
 			a.Score = int(newRatingA)
 			b.Score = int(newRatingB)
-		}
-	}
+			return nil
+		},
+	)
 
 	// Order tweets by score and views
 	sort.Slice(tws, func(i, j int) bool {
@@ -303,6 +344,58 @@ func Elo(ctx context.Context, cfg *EloConfig) error {
 		fmt.Println(string(data))
 	}
 	return nil
+}
+
+// Generic concurrent function
+func concurrent[T any](ctx context.Context, n int, next func() (T, bool), fn func(T) error) {
+	errC := make(chan error, n)
+	defer close(errC)
+	for i := 0; i < n; i++ {
+		errC <- nil
+	}
+	var wg sync.WaitGroup
+
+	var nErr int
+	for {
+		var err error
+		select {
+		case <-ctx.Done():
+			log.Println("context cancelled")
+		case err = <-errC:
+		}
+		if ctx.Err() != nil {
+			break
+		}
+		if err != nil {
+			nErr += 1
+		} else {
+			nErr = 0
+		}
+
+		// Check exit conditions
+		if nErr > 10 {
+			log.Println("too many consecutive errors")
+			break
+		}
+
+		// Get next value
+		v, ok := next()
+		if !ok {
+			break
+		}
+
+		// Launch job in a goroutine
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			err := fn(v)
+			if err != nil {
+				log.Println(err)
+			}
+			errC <- err
+		}()
+	}
+	wg.Wait()
 }
 
 var numberRegex = regexp.MustCompile(`\d+`)
